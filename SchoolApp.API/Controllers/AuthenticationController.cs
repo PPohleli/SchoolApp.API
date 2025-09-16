@@ -2,10 +2,15 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
+using Microsoft.IdentityModel.Tokens;
 using SchoolApp.API.Data;
 using SchoolApp.API.Data.Models;
 using SchoolApp.API.Data.ViewModels;
 using System;
+using System.Collections.Generic;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace SchoolApp.API.Controllers
@@ -75,10 +80,48 @@ namespace SchoolApp.API.Controllers
             //Check if user exists in db
             if (userExist != null && await _userManager.CheckPasswordAsync(userExist, loginVM.Password))
             {
-                return Ok($"User logged in successfully!");
+                //get access token
+                var tokenValue = await GenerateJWTTokenAsync(userExist);
+                return Ok(tokenValue);
+                //return Ok($"User logged in successfully!");
             }
             return Unauthorized();
         }
 
+        private async Task<AuthResultVM> GenerateJWTTokenAsync(ApplicationUser user)
+        {
+            //define authentication claims - claims are pieces of information about the user (properties relating to the user)
+            var authClaims = new List<Claim>()
+            {
+                new Claim(ClaimTypes.Name, user.UserName),
+                new Claim(ClaimTypes.NameIdentifier, user.Id),
+                new Claim(JwtRegisteredClaimNames.Email, user.Email),
+                new Claim(JwtRegisteredClaimNames.Sub, user.Email),
+                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+            };
+
+            //get secret key from app settings
+            var authSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(_configuration["JWT:Secret"]));
+
+            //define token
+            var token = new JwtSecurityToken(
+                issuer: _configuration["JWT:Issuer"],
+                audience: _configuration["JWT:Audience"],
+                expires: DateTime.UtcNow.AddMinutes(1),
+                claims: authClaims,
+                signingCredentials: new SigningCredentials(authSigningKey, SecurityAlgorithms.HmacSha256));
+
+            //gerate JWT token string
+            var jwtToken = new JwtSecurityTokenHandler().WriteToken(token);
+
+            //contruct response
+            var response = new AuthResultVM()
+            {
+                Token = jwtToken,
+                ExpiresAt = token.ValidTo
+            };
+            return response;
+
+        }
     }
 }
