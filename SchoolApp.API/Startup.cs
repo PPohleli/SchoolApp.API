@@ -38,6 +38,24 @@ namespace SchoolApp.API
             // Configure DbContext with SQL Server
             services.AddDbContext<AppDbContext>(options => options.UseSqlServer(ConnectionString));
 
+            //setup token validation parameters
+            var tokenValidationParameters = new TokenValidationParameters()
+            {
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(Configuration["JWT:Secret"])),
+
+                ValidateIssuer = true,
+                ValidIssuer = Configuration["JWT:Issuer"],
+
+                ValidateAudience = true,
+                ValidAudience = Configuration["JWT:Audience"],
+
+                ValidateLifetime = true,
+                ClockSkew = TimeSpan.Zero
+
+            };
+            //register token validation parameters
+            services.AddSingleton(tokenValidationParameters);
 
             //Add Identity
             services.AddIdentity<ApplicationUser, IdentityRole>().AddEntityFrameworkStores<AppDbContext>().AddDefaultTokenProviders();
@@ -53,18 +71,7 @@ namespace SchoolApp.API
                 {
                     options.SaveToken = true;
                     options.RequireHttpsMetadata = false;
-                    options.TokenValidationParameters = new TokenValidationParameters()
-                    {
-                        ValidateIssuerSigningKey = true,
-                        IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(Configuration["JWT:Secret"])),
-
-                        ValidateIssuer = true,
-                        ValidIssuer = Configuration["JWT:Issuer"],
-
-                        ValidateAudience = true,
-                        ValidAudience = Configuration["JWT:Audience"],
-
-                    };
+                    options.TokenValidationParameters = tokenValidationParameters;
                 });
 
             services.AddControllers();
