@@ -114,10 +114,24 @@ namespace SchoolApp.API.Controllers
             //gerate JWT token string
             var jwtToken = new JwtSecurityTokenHandler().WriteToken(token);
 
+            //create and store refresh token
+            var refreshToken = new RefreshToken()
+            {
+                JwtId = token.Id,
+                IsRevoked = false,
+                UserId = user.Id,
+                DateAdded = DateTime.UtcNow,
+                DateExpire = DateTime.UtcNow.AddMonths(6),
+                Token = Guid.NewGuid().ToString() + "-" + Guid.NewGuid().ToString()
+            };
+            await _context.RefreshTokens.AddAsync(refreshToken);
+            await _context.SaveChangesAsync();
+
             //contruct response
             var response = new AuthResultVM()
             {
                 Token = jwtToken,
+                RefreshToken = refreshToken.Token,
                 ExpiresAt = token.ValidTo
             };
             return response;
