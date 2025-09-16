@@ -11,6 +11,6 @@ namespace SchoolApp.API.Data
 
         }
 
-
+        public DbSet<RefreshToken> RefreshTokens { get; set; }
     }
 }
