@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using SchoolApp.API.Data;
@@ -83,14 +84,54 @@ namespace SchoolApp.API.Controllers
             if (userExist != null && await _userManager.CheckPasswordAsync(userExist, loginVM.Password))
             {
                 //get access token
-                var tokenValue = await GenerateJWTTokenAsync(userExist);
+                var tokenValue = await GenerateJWTTokenAsync(userExist, null);
                 return Ok(tokenValue);
                 //return Ok($"User logged in successfully!");
             }
             return Unauthorized();
         }
 
-        private async Task<AuthResultVM> GenerateJWTTokenAsync(ApplicationUser user)
+
+        [HttpPost("refresh-token")]
+        public async Task<IActionResult> RefreshToken([FromBody] TokenRequestVM tokenRequestVM)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest("Please provide all required fields!");
+            }
+
+            var result = await VerifyAndGenerateGenerateTokenAsync(tokenRequestVM);
+            return Ok(result);
+
+        }
+
+        private async Task<AuthResultVM> VerifyAndGenerateGenerateTokenAsync(TokenRequestVM tokenRequestVM)
+        {
+            var jwtTokenHandler = new JwtSecurityTokenHandler();
+            var storedToken = await _context.RefreshTokens.FirstOrDefaultAsync(x => x.Token == tokenRequestVM.RefreshToken);
+            var dbUser = await _userManager.FindByIdAsync(storedToken.UserId);
+
+            try
+            {
+                var tokenCheckResult = jwtTokenHandler.ValidateToken(tokenRequestVM.Token, _tokenValidationParameters, out var validatedToken);
+
+                return await GenerateJWTTokenAsync(dbUser, storedToken);
+            }
+            catch (Exception)
+            {
+
+                if (storedToken.DateExpire >= DateTime.UtcNow)
+                {
+                    return await GenerateJWTTokenAsync(dbUser, storedToken);
+                }
+                else
+                {
+                    return await GenerateJWTTokenAsync(dbUser, null);
+                }
+            }
+        }
+
+        private async Task<AuthResultVM> GenerateJWTTokenAsync(ApplicationUser user, RefreshToken rToken)
         {
             //define authentication claims - claims are pieces of information about the user (properties relating to the user)
             var authClaims = new List<Claim>()
@@ -115,6 +156,18 @@ namespace SchoolApp.API.Controllers
 
             //gerate JWT token string
             var jwtToken = new JwtSecurityTokenHandler().WriteToken(token);
+
+            if (rToken != null)
+            {
+                //contruct response
+                var rTokenresponse = new AuthResultVM()
+                {
+                    Token = jwtToken,
+                    RefreshToken = rToken.Token,
+                    ExpiresAt = token.ValidTo
+                };
+                return rTokenresponse;
+            }
 
             //create and store refresh token
             var refreshToken = new RefreshToken()
