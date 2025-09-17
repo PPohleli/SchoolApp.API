@@ -15,5 +15,8 @@ namespace SchoolApp.API.Data.ViewModels
 
         [Required]
         public string Password { get; set; }
+
+        [Required]
+        public string Role { get; set; }
     }
 }
